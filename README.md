@@ -70,7 +70,9 @@ $route->run();
 
 // output: 'id: 7'
 
-echo Alias::getAlias('@item', ['id' => 15]); // output: '/items/15/'
+echo Alias::getAlias('@item', ['id' => 15]); 
+
+// output: '/items/15/'
 ```
 
 Pattern
@@ -272,7 +274,9 @@ $route->run();
 
 // output: 'id: 7'
 
-echo Alias::getAlias('@api.item', ['id' => 15]); // output: '/api/items/15/'        
+echo Alias::getAlias('@api.item', ['id' => 15]); 
+
+// output: '/api/items/15/'        
 ```
 
 Here, the `'path' => '/api/'` is the prefix for the rules of this group.
@@ -297,7 +301,9 @@ $route->run();
 
 // output: 'id: 7'
 
-echo Alias::getAlias('@api.item', ['id' => 15]); // output: 'api.site.com/items/15/'        
+echo Alias::getAlias('@api.item', ['id' => 15]); 
+
+// output: 'api.site.com/items/15/'        
 ```
 
 Alias for route
@@ -308,7 +314,9 @@ Using the `as` index of our route array you can assign a alias to a route:
 ```php
 $route->get('/items/{id:\d+}/', $handler, ['as' => 'item']);
 
-echo Alias::getAlias('@item', ['id' => 15]); // output: '/items/15/'
+echo Alias::getAlias('@item', ['id' => 15]); 
+
+// output: '/items/15/'
 ```
 
 Extended example:
@@ -345,7 +353,9 @@ $config = [
 
 $route = new Route($config);
 
-echo Alias::getAlias('@item'); // output: '/items/{id}/'
+echo Alias::getAlias('@item'); 
+
+// output: '/items/{id}/'
 ```
 
 Using response
