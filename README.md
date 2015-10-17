@@ -84,7 +84,11 @@ You can use string or array as pattern.
 $pattern = [
     Route::FILTER_HOST => '{sub:[a-z]+}.site.com',
     Route::FILTER_PATH => '/items/{id:\d+}/',
-    Route::FILTER_GET => ['query' => true, 'view' => 'all', 'order' => 'sort-{order:(asc|desc)}']
+    Route::FILTER_GET => [
+        'query' => true, 
+        'view' => 'all', 
+        'order' => 'sort-{order:(asc|desc)}'
+    ]
 ]
 $route->post($pattern, $handler);
 ```
@@ -325,7 +329,11 @@ Extended example:
 $pattern = [
     Route::FILTER_HOST => '{sub:[a-z]+}.site.com',
     Route::FILTER_PATH => '/items/{id:\d+}/',
-    Route::FILTER_GET => ['query' => true, 'view' => 'all', 'order' => 'sort-{order:(asc|desc)}']
+    Route::FILTER_GET => [
+        'query' => true, 
+        'view' => 'all', 
+        'order' => 'sort-{order:(asc|desc)}'
+    ]
 ]
 $route->get($pattern, $handler, ['as' => 'item']);
 
@@ -337,7 +345,11 @@ echo Alias::getAlias('@item');
 Also you can set a alias to [group](#using-groups):
 
 ```php
-$route->group(Route::ANY, [ Route::FILTER_HOST => 'api.site.com' ], $handler, ['as' => 'api']);
+$route->group(
+    Route::ANY, 
+    [ Route::FILTER_HOST => 'api.site.com' ], 
+    $handler, ['as' => 'api']
+);
 ```
 
 All rules belonging to this group will inherit this alias.
