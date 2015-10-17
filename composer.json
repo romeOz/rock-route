@@ -1,6 +1,6 @@
 {
   "name": "romeoz/rock-route",
-  "description": "Simple router with REST",
+  "description": "Simple router for PHP",
   "keywords": [
     "router",
     "route",
