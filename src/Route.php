@@ -117,33 +117,6 @@ REGEX;
         Event::trigger($self, self::EVENT_END_ROUTER);
     }
 
-//
-//    /**
-//     * Set config scope
-//     *
-//     * @param string $path path to config
-//     * @param bool $clear clear DIC.
-//     * @throws RouteException
-//     * @throws \Exception
-//     */
-//    public static function setConfigScope($path, $clear = true)
-//    {
-//        $path = Alias::getAlias($path);
-//        if (!file_exists($path) || (!$config = require($path))) {
-//            throw new RouteException(RouteException::UNKNOWN_FILE, ['path' => $path]);
-//        }
-//        if ($clear) {
-//            Container::removeAll();
-//        }
-//        $components = $config['components'] ?: [];
-//        if (class_exists('\rock\Rock')) {
-//            unset($config['components']);
-//            Rock::$components = $components;
-//            Rock::$config = $config;
-//        }
-//        Container::registerMulti($components);
-//    }
-
     /**
      * Add route.
      *
