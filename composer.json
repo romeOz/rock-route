@@ -1,0 +1,51 @@
+{
+  "name": "romeoz/rock-route",
+  "description": "Simple router with REST",
+  "keywords": [
+    "router",
+    "route",
+    "rest"
+  ],
+  "type": "library",
+  "license": "MIT",
+  "support": {
+    "email": "serggalka@gmail.com",
+    "issues": "https://github.com/romeOz/rock-route/issues",
+    "source": "https://github.com/romeOz/rock-route"
+  },
+  "authors": [
+    {
+      "name": "Ruslan",
+      "email": "serggalka@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=5.4.0",
+    "romeoz/rock-components": "*@dev",
+    "romeoz/rock-request": "*@dev",
+    "romeoz/rock-access": "*@dev"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^4.7.0",
+
+    "romeoz/rock-base": "*@dev",
+
+    "romeoz/rock-filters": "*@dev",
+    "romeoz/rock-cache": "*@dev"
+  },
+  "suggest": {
+    "romeoz/rock-response" : "Rock Response",
+    "romeoz/rock-filters": "required for route-filters",
+    "romeoz/rock-cache": "required for caching rules"
+  },
+  "autoload": {
+    "psr-4": {
+      "rock\\route\\": "src/"
+    }
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-master": "0.10-dev"
+    }
+  }
+}
