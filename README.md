@@ -17,8 +17,9 @@ Table of Contents
  * [Installation](#installation)
  * [Quick Start](#quick-start)
  * [Pattern](#pattern)
- * [Configurable](#as-configurable)
+ * [Configurable](#configurable)
  * [Filters](#filters) 
+    - [Custom filter](#custom-filter)
  * [REST](#rest)
  * [Using groups](#using-groups)
     - [Route prefixing](#route-prefixing)
@@ -27,6 +28,25 @@ Table of Contents
  * [Using response](#using-response)
  * [Caching rules](#caching-rules)
  * [Requirements](#requirements)
+
+Installation
+-------------------
+
+From the Command Line:
+
+```
+composer require romeoz/rock-route
+```
+
+or in your composer.json:
+
+```json
+{
+    "require": {
+        "romeoz/rock-route": "*"
+    }
+}
+``` 
  
 Quick Start
 -------------------
