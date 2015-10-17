@@ -1,6 +1,8 @@
 Simple router for PHP
 =================
 
+[![Latest Stable Version](https://poser.pugx.org/romeOz/rock-route/v/stable.svg)](https://packagist.org/packages/romeOz/rock-route)
+[![Total Downloads](https://poser.pugx.org/romeOz/rock-route/downloads.svg)](https://packagist.org/packages/romeOz/rock-route)
 [![Build Status](https://travis-ci.org/romeOz/rock-route.svg?branch=master)](https://travis-ci.org/romeOz/rock-route)
 [![HHVM Status](http://hhvm.h4cc.de/badge/romeoz/rock-route.svg)](http://hhvm.h4cc.de/package/romeoz/rock-route)
 [![Coverage Status](https://coveralls.io/repos/romeOz/rock-route/badge.svg?branch=master)](https://coveralls.io/r/romeOz/rock-route?branch=master)
