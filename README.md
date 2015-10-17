@@ -12,6 +12,7 @@ Features
  * Filters
  * Support REST
  * Groups
+ * Inject arguments to action
  * Caching rules
  * Standalone module/component for [Rock Framework](https://github.com/romeOz/rock)
 
@@ -30,6 +31,7 @@ Table of Contents
     - [Sub-Domain routing](#sub-domain-routing)
  * [Alias for route](#alias-for-route)
  * [Using response](#using-response)
+ * [Inject arguments](#inject-arguments)
  * [Caching rules](#caching-rules)
  * [Requirements](#requirements)
 
@@ -390,6 +392,30 @@ $response->send();
 
 // output: {"id":7}
 ```
+
+More details [see docs](https://github.com/romeOz/rock-response)
+
+Inject arguments
+------------------
+
+```php
+$route = new Route;
+
+$route->get('/', ['ItemsController', 'actionIndex'])
+$route->run();
+
+class ItemsController
+{
+    public function actionIndex(\rock\request\Request $request)
+    {
+        return $request::className();
+    }
+}
+
+// output: 'rock\request\Request'
+```
+
+More flexible use is possible using the library [Rock DI](https://github.com/romeOz/rock-di): `composer require romeoz/rock-di`.
 
 Caching rules
 ------------------
