@@ -19,7 +19,7 @@ Table of Contents
  * [Pattern](#pattern)
  * [Configurable](#configurable)
  * [Filters](#filters) 
-    - [Custom filter](#custom-filter)
+    - [Custom filter](#custom-filter-as-callable)
  * [REST](#rest)
  * [Using groups](#using-groups)
     - [Route prefixing](#route-prefixing)
