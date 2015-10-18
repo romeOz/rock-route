@@ -21,17 +21,14 @@
   ],
   "require": {
     "php": ">=5.4.0",
-    "romeoz/rock-components": "*@dev",
-    "romeoz/rock-request": "*@dev",
-    "romeoz/rock-access": "*@dev"
+    "romeoz/rock-components": "0.11.*",
+    "romeoz/rock-request": "0.11.*",
+    "romeoz/rock-access": "0.10.*"
   },
   "require-dev": {
     "phpunit/phpunit": "^4.7.0",
-
-    "romeoz/rock-base": "*@dev",
-
-    "romeoz/rock-filters": "*@dev",
-    "romeoz/rock-cache": "*@dev"
+    "romeoz/rock-filters": "0.10.*",
+    "romeoz/rock-cache": "0.14.*"
   },
   "suggest": {
     "romeoz/rock-response" : "Rock Response",
