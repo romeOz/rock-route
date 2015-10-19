@@ -675,7 +675,18 @@ REGEX;
 
             if (is_string($alias)) {
                 $build = $this->buildAlias($pattern, $params, $group);
-                Alias::setAlias(str_replace('/', '.', $alias), $build, false);
+                Alias::setAlias(
+                    str_replace('/', '.', $alias),
+                    StringHelper::replace(
+                        $build,
+                        [
+                            'self_path' => $this->request->getUrlWithoutArgs(),
+                            'self_scheme' => $this->request->getScheme()
+                        ],
+                        false
+                    ),
+                    false
+                );
                 $aliases[$alias] = $build;
             }
         }
@@ -705,33 +716,36 @@ REGEX;
             $url[self::FILTER_PATH] = $group[self::FILTER_PATH];
         }
 
-        if (isset($url[self::FILTER_PATH])) {
-            $get = [];
-            if (!empty($pattern[self::FILTER_GET])) {
-                foreach ($pattern[self::FILTER_GET] as $name => $param) {
-                    if (is_bool($param)) {
-                        continue;
-                    }
-                    $get[$name] = $this->buildWithoutPattern($param);
+        if (!isset($url[self::FILTER_PATH])) {
+            $url[self::FILTER_PATH] = '{self_path}';
+        }
+
+        $get = [];
+        if (!empty($pattern[self::FILTER_GET])) {
+            foreach ($pattern[self::FILTER_GET] as $name => $param) {
+                if (is_bool($param)) {
+                    continue;
                 }
+                $get[$name] = $this->buildWithoutPattern($param);
             }
+        }
 
-            if (!empty($group[self::FILTER_GET])) {
-                $get = array_merge($group[self::FILTER_GET], $get);
-            }
+        if (!empty($group[self::FILTER_GET])) {
+            $get = array_merge($group[self::FILTER_GET], $get);
+        }
 
-            if (!empty($get)) {
-                $url[self::FILTER_GET] = urldecode(http_build_query($get));
-            }
+        if (!empty($get)) {
+            $url[self::FILTER_GET] = urldecode(http_build_query($get));
         }
 
         if (!isset($url[self::FILTER_HOST])) {
             unset($url[self::FILTER_SCHEME], $url[self::FILTER_PORT]);
         } elseif(!isset($url[self::FILTER_SCHEME])) {
-            $url[self::FILTER_SCHEME] = $this->request->getScheme();
+            $url[self::FILTER_SCHEME] = '{self_scheme}';
         }
 
         $url = http_build_url($url);
+
         if (isset($params['replace'])) {
             $url = is_array($params['replace']) ? strtr($url, $params['replace']) : str_replace('{url}', $params['replace'], $url);
         }
@@ -953,6 +967,19 @@ REGEX;
         if ($this->enableCache && isset($this->cache)) {
             if (($data = $this->cache->get(static::className())) !== false) {
                 list($groups, $aliases) = $data;
+                if ($aliases) {
+
+                }
+                foreach ($aliases as &$alias) {
+                    $alias = StringHelper::replace(
+                        $alias,
+                        [
+                            'self_path' => $this->request->getUrlWithoutArgs(),
+                            'self_scheme' => $this->request->getScheme()
+                        ],
+                        false
+                    );
+                }
                 Alias::setAliases($aliases, false);
                 $groups = array_merge_recursive($groups, $this->groups);
                 array_shift($groups);
@@ -971,6 +998,16 @@ REGEX;
         if ($this->enableCache && isset($this->cache)) {
             if (($data = $this->cache->get(static::className())) !== false) {
                 list($rules, $aliases) = $data;
+                foreach ($aliases as &$alias) {
+                    $alias = StringHelper::replace(
+                        $alias,
+                        [
+                            'self_path' => $this->request->getUrlWithoutArgs(),
+                            'self_scheme' => $this->request->getScheme()
+                        ],
+                        false
+                    );
+                }
                 Alias::setAliases($aliases, false);
                 $rules = array_merge($rules, $this->rules);
                 return $this->rules = $rules;
