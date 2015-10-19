@@ -637,7 +637,6 @@ REGEX;
                 }
             }
 
-
             $result[$alias] = $rule;
             if (isset($params['controller'])) {
                 $result[$alias]['params']['controller'] = $params['controller'];
@@ -676,7 +675,7 @@ REGEX;
 
             if (is_string($alias)) {
                 $build = $this->buildAlias($pattern, $params, $group);
-                Alias::setAlias($alias, $build, false);
+                Alias::setAlias(str_replace('/', '.', $alias), $build, false);
                 $aliases[$alias] = $build;
             }
         }
@@ -728,7 +727,10 @@ REGEX;
 
         if (!isset($url[self::FILTER_HOST])) {
             unset($url[self::FILTER_SCHEME], $url[self::FILTER_PORT]);
+        } elseif(!isset($url[self::FILTER_SCHEME])) {
+            $url[self::FILTER_SCHEME] = $this->request->getScheme();
         }
+
         $url = http_build_url($url);
         if (isset($params['replace'])) {
             $url = is_array($params['replace']) ? strtr($url, $params['replace']) : str_replace('{url}', $params['replace'], $url);

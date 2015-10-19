@@ -113,16 +113,16 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     {
         return [
             ['ajax.site.com', '/news/7/', null, [Route::FILTER_HOST => 'ajax.site.com'], null, '/news/{id:\d+}/',
-                ['id' => 7], 'ajax.site.com/news/{id}/'
+                ['id' => 7], 'http://ajax.site.com/news/{id}/'
             ],
             ['ajax.site.com', '/news/7/', null, [Route::FILTER_HOST => '{sub:\w+}.site.com'], null, '/news/{id:\d+}/',
-                ['id' => 7, 'sub' => 'ajax'], '{sub}.site.com/news/{id}/'
+                ['id' => 7, 'sub' => 'ajax'], 'http://{sub}.site.com/news/{id}/'
             ],
             ['ajax.site.com', '/news/7/', null, [Route::FILTER_HOST => '{sub:\w+}.site.com', Route::FILTER_PATH => '/news/{url:.+}'], '/news/', '/{id:\d+}/',
-                ['id' => 7, 'url' => '7/', 'sub' => 'ajax'], '{sub}.site.com/news/{id}/'
+                ['id' => 7, 'url' => '7/', 'sub' => 'ajax'], 'http://{sub}.site.com/news/{id}/'
             ],
             ['ajax.site.com', '/news/7/', ['view' => 'all'], [Route::FILTER_HOST => '{sub:\w+}.site.com', Route::FILTER_PATH => '/news/{url:.+}', Route::FILTER_GET => ['view' => 'all']], '/news/', '/{id:\d+}/',
-                ['id' => 7, 'url' => '7/', 'sub' => 'ajax'], '{sub}.site.com/news/{id}/?view=all'
+                ['id' => 7, 'url' => '7/', 'sub' => 'ajax'], 'http://{sub}.site.com/news/{id}/?view=all'
             ],
         ];
     }
