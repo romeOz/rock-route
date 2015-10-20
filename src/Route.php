@@ -587,6 +587,9 @@ REGEX;
             if (!empty($pattern[self::FILTER_GET]) && empty($group[self::FILTER_GET])) {
                 foreach ($pattern[self::FILTER_GET] as $name => $param) {
                     if (is_bool($param)) {
+                        if ($this->request->rawGet($name) !== '') {
+                            $group[self::FILTER_GET][$name] = "{{self_query_{$name}}}";
+                        }
                         continue;
                     }
                     $group[self::FILTER_GET][$name] = $this->buildWithoutPattern($param);
@@ -675,16 +678,16 @@ REGEX;
 
             if (is_string($alias)) {
                 $build = $this->buildAlias($pattern, $params, $group);
+                $placeholders = [
+                    'self_path' => $this->request->getUrlWithoutArgs(),
+                    'self_scheme' => $this->request->getScheme()
+                ];
+                foreach ($this->request->rawGet() ? : [] as $name => $placeholder) {
+                    $placeholders["self_query_{$name}"]  = $placeholder;
+                }
                 Alias::setAlias(
                     str_replace('/', '.', $alias),
-                    StringHelper::replace(
-                        $build,
-                        [
-                            'self_path' => $this->request->getUrlWithoutArgs(),
-                            'self_scheme' => $this->request->getScheme()
-                        ],
-                        false
-                    ),
+                    StringHelper::replace($build, $placeholders, false),
                     false
                 );
                 $aliases[$alias] = $build;
@@ -724,6 +727,9 @@ REGEX;
         if (!empty($pattern[self::FILTER_GET])) {
             foreach ($pattern[self::FILTER_GET] as $name => $param) {
                 if (is_bool($param)) {
+                    if ($this->request->rawGet($name) !== '') {
+                        $get[$name] = "{{self_query_{$name}}}";
+                    }
                     continue;
                 }
                 $get[$name] = $this->buildWithoutPattern($param);
@@ -939,11 +945,11 @@ REGEX;
             case self::FILTER_PATH:
                 return [$this->data['path']];
             case self::FILTER_GET:
-                return Request::rawGet() ?: [];
+                return $this->request->rawGet() ?: [];
             case self::FILTER_POST:
             case self::FILTER_PUT:
             case self::FILTER_DELETE:
-                return Request::rawPost() ?: [];
+                return $this->request->rawPost() ?: [];
             default:
                 throw new RouteException(RouteException::UNKNOWN_FORMAT, ['format' => $key]);
         }
@@ -967,20 +973,7 @@ REGEX;
         if ($this->enableCache && isset($this->cache)) {
             if (($data = $this->cache->get(static::className())) !== false) {
                 list($groups, $aliases) = $data;
-                if ($aliases) {
-
-                }
-                foreach ($aliases as &$alias) {
-                    $alias = StringHelper::replace(
-                        $alias,
-                        [
-                            'self_path' => $this->request->getUrlWithoutArgs(),
-                            'self_scheme' => $this->request->getScheme()
-                        ],
-                        false
-                    );
-                }
-                Alias::setAliases($aliases, false);
+                Alias::setAliases($this->prepareAliases($aliases), false);
                 $groups = array_merge_recursive($groups, $this->groups);
                 array_shift($groups);
                 return $this->groups = $groups;
@@ -998,17 +991,7 @@ REGEX;
         if ($this->enableCache && isset($this->cache)) {
             if (($data = $this->cache->get(static::className())) !== false) {
                 list($rules, $aliases) = $data;
-                foreach ($aliases as &$alias) {
-                    $alias = StringHelper::replace(
-                        $alias,
-                        [
-                            'self_path' => $this->request->getUrlWithoutArgs(),
-                            'self_scheme' => $this->request->getScheme()
-                        ],
-                        false
-                    );
-                }
-                Alias::setAliases($aliases, false);
+                Alias::setAliases($this->prepareAliases($aliases), false);
                 $rules = array_merge($rules, $this->rules);
                 return $this->rules = $rules;
             }
@@ -1038,6 +1021,21 @@ REGEX;
         }
 
         return $rules;
+    }
+
+    private function prepareAliases(array $aliases)
+    {
+        foreach ($aliases as &$alias) {
+            $placeholders = [
+                'self_scheme' => $this->request->getScheme(),
+                'self_path' => $this->request->getUrlWithoutArgs(),
+            ];
+            foreach ($this->request->rawGet() ? : [] as $name => $placeholder) {
+                $placeholders["self_query_{$name}"]  = $placeholder;
+            }
+            $alias = StringHelper::replace($alias, $placeholders, false);
+        }
+        return $aliases;
     }
 
     protected function successInternal()
