@@ -16,11 +16,12 @@ use rock\helpers\Helper;
 use rock\helpers\Instance;
 use rock\helpers\StringHelper;
 use rock\request\Request;
+use rock\request\Requestable;
 use rock\request\RequestInterface;
 use rock\response\Response;
 use rock\sanitize\Sanitize;
 
-class Route implements RequestInterface, ErrorsInterface, ComponentsInterface, \ArrayAccess
+class Route implements RequestInterface, Requestable, ErrorsInterface, ComponentsInterface, \ArrayAccess
 {
     use ComponentsTrait;
     use ErrorsTrait;
@@ -89,7 +90,15 @@ REGEX;
     public function init()
     {
         $this->request = Instance::ensure($this->request, Request::className());
-        $this->response = Instance::ensure($this->response, '\rock\response\Response', [], false);
+        if (is_array($this->response)) {
+            $this->response['request'] = $this->request;
+            $this->response = Instance::ensure($this->response, '\rock\response\Response', [], false);
+        } else {
+            $this->response = Instance::ensure($this->response, '\rock\response\Response', [], false);
+            if ($this->response instanceof Response) {
+                $this->response->request = $this->request;
+            }
+        }
         $this->cache = Instance::ensure($this->cache, null, [], false);
 
         $this->calculateData();
@@ -99,22 +108,27 @@ REGEX;
 
     public function run($new = false)
     {
-        $self = $this;
+        $route = $this;
         if ($new) {
             $config = [
                 'class' => static::className(),
                 'response' => $this->response
             ];
-            /** @var static $self */
-            $self = Instance::ensure($config);
+            /** @var static $route */
+            $route = Instance::ensure($config);
         }
-        Event::trigger($self, self::EVENT_BEGIN_ROUTER);
-        if (!empty($self->groups)) {
-            $self->checkGroups($self->getGroups());
+        Event::trigger($route, self::EVENT_BEGIN_ROUTER);
+        if (!empty($route->groups)) {
+            $check = $route->checkGroups($route->getGroups());
         } else {
-            $self->checkRules($self->getRules());
+            $check = $route->checkRules($route->getRules());
         }
-        Event::trigger($self, self::EVENT_END_ROUTER);
+        if ($check) {
+            $this->successInternal();
+        } else {
+            $this->failInternal();
+        }
+        Event::trigger($route, self::EVENT_END_ROUTER);
     }
 
     /**
@@ -331,6 +345,75 @@ REGEX;
     }
 
     /**
+     * Sends a request-query and returns {@see \rock\response\Response}.
+     * @param string $url url
+     * @param array $params
+     * @return Response|null
+     * @throws RouteException
+     * @throws \Exception
+     * @throws \rock\helpers\InstanceException
+     */
+    public function route($url, array $params = [])
+    {
+        $paramsURL = parse_url($url);
+        $params = array_merge($paramsURL, $params);
+        $params['method'] = isset($params['method']) ? $params['method'] : self::GET;
+        $config = [
+            'method' => $params['method'] ,
+            'scheme' => isset($params['scheme']) ? $params['scheme']: null,
+            'host' => isset($params['host']) ? $params['host']: null,
+            'port' => isset($params['port']) ? $params['port']: null,
+            'url' => isset($params['path']) ? $params['path'] : null
+        ];
+
+        if ($params['method'] !== self::GET) {
+            if (isset($params['query']) && is_array($params['query'])) {
+                $config['bodyParams'] = $params['query'];
+            }
+        } elseif (isset($params['query'])) {
+
+            if (is_array($params['query'])) {
+                $params['query'] = http_build_query($params['query']);
+            }
+            $config['queryString'] = $params['query'];
+            if (isset($config['url'])) {
+                $config['url'] .=  "?{$params['query']}";
+            }
+        }
+        $config['class'] = Request::className();
+        /** @var Request $request */
+        $request = Instance::ensure($config);
+
+        return $this->routeByRequest($request);
+    }
+
+    /**
+     * Sends a request-query and returns {@see \rock\response\Response}.
+     * @param Request $request
+     * @return Response|null
+     * @throws RouteException
+     * @throws \rock\helpers\InstanceException
+     */
+    public function routeByRequest(Request $request)
+    {
+        /** @var static $route */
+        $route = Instance::ensure([
+            'class' => static::className(),
+            'request' => $request,
+        ]);
+        if (!empty($this->groups)) {
+            $check = $route->checkGroups($this->groups);
+        } else {
+            $check = $route->checkRules($this->rules);
+        }
+
+        if ($check) {
+            return $route->response;
+        }
+        return null;
+    }
+
+    /**
      * Checking groups.
      * @param array $groups
      * @return bool
@@ -371,14 +454,13 @@ REGEX;
                         $this->params = array_merge($this->params, $rule['params']);
                     }
                     $this->errors = 0;
-                    $this->successInternal();
+
                     $this->handle($handler);
                     return true;
                 } else {
                     $this->errors |= $this->errors;
                 }
             }
-            $this->failInternal();
             return false;
         }
         throw new RouteException(RouteException::UNKNOWN_PROPERTY, ['name' => 'rules']);
@@ -765,14 +847,18 @@ REGEX;
             list($class, $method) = $handler;
             if (is_string($class)) {
                 $class = StringHelper::replace($class, $this->getParams(), false);
-                $method= StringHelper::replace($method, $this->getParams(), false);
+                $method = StringHelper::replace($method, $this->getParams(), false);
                 if (!class_exists($class)) {
                     throw new RouteException(RouteException::UNKNOWN_CLASS, ['class' => $class]);
                 }
-                $class = Instance::ensure($class);
-                if ($class instanceof Responseble) {
-                    $class->response = $this->response;
+                $config = ['class' => $class];
+                if (is_subclass_of($class, '\rock\base\Responseble')) {
+                    $config['response'] = $this->response;
                 }
+                if (is_subclass_of($class, '\rock\request\Requestable')) {
+                    $config['request'] = $this->request;
+                }
+                $class = Instance::ensure($config);
             }
 
             if (!method_exists($class, $method)) {
