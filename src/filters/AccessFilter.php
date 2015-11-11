@@ -3,7 +3,7 @@
 namespace rock\route\filters;
 
 
-use rock\access\AccessErrorInterface;
+use rock\filters\AccessErrorInterface;
 use rock\filters\AccessTrait;
 use rock\route\RouteEvent;
 

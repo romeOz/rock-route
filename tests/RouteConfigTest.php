@@ -80,7 +80,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     {
         $_SERVER['HTTP_HOST'] = $_SERVER['SERVER_NAME'] = $host;
         $_SERVER['REQUEST_URI'] = $path;
-        $_GET = $get;
+        $_SERVER['QUERY_STRING'] = $get;
         $route =
             (new Route([
                 'groups' => [
@@ -121,7 +121,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
             ['ajax.site.com', '/news/7/', null, [Route::FILTER_HOST => '{sub:\w+}.site.com', Route::FILTER_PATH => '/news/{url:.+}'], '/news/', '/{id:\d+}/',
                 ['id' => 7, 'url' => '7/', 'sub' => 'ajax'], 'http://{sub}.site.com/news/{id}/'
             ],
-            ['ajax.site.com', '/news/7/', ['view' => 'all'], [Route::FILTER_HOST => '{sub:\w+}.site.com', Route::FILTER_PATH => '/news/{url:.+}', Route::FILTER_GET => ['view' => 'all']], '/news/', '/{id:\d+}/',
+            ['ajax.site.com', '/news/7/', 'view=all', [Route::FILTER_HOST => '{sub:\w+}.site.com', Route::FILTER_PATH => '/news/{url:.+}', Route::FILTER_GET => ['view' => 'all']], '/news/', '/{id:\d+}/',
                 ['id' => 7, 'url' => '7/', 'sub' => 'ajax'], 'http://{sub}.site.com/news/{id}/?view=all'
             ],
         ];
@@ -198,8 +198,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     public function testPatternAsArraySuccess()
     {
         $_SERVER['REQUEST_URI'] = '/bar/test';
-        $_GET['query'] = '';
-        $_GET['view'] = 'all-views';
+        $_SERVER['QUERY_STRING'] = 'query=&view=all-views';
         (new Route(
             [
                 'rules' =>
@@ -233,8 +232,14 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     public function testPatternAsArrayFail($path, $query, $getView, $method, $output = null)
     {
         $_SERVER['REQUEST_URI'] = $path;
-        $_GET['query'] = $query;
-        $_GET['view'] = $getView;
+        $get = [];
+        if (isset($getView)) {
+            $get['view'] = $getView;
+        }
+        if (isset($query)) {
+            $get['query'] = $query;
+        }
+        $_SERVER['QUERY_STRING'] = http_build_query($get);
         (new Route(
             [
                 'rules' =>
@@ -361,7 +366,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/',
                 Route::GET,
                 null,
-                'success0action'
+                'actionsuccess0'
             ],
             [
                 function () {
@@ -372,7 +377,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/',
                 [Route::PUT],
                 null,
-                'success0action'
+                'actionsuccess0'
             ],
             [
                 function () {
@@ -383,7 +388,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/',
                 Route::ANY,
                 null,
-                'success0action'
+                'actionsuccess0'
             ],
             [
 
@@ -395,13 +400,13 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/{controller:(?:news|tags)}/',
                 Route::GET,
                 null,
-                'success0tagsaction'
+                'tagsactionsuccess0'
             ],
             [
                 function () {
                     $_SERVER['HTTP_HOST'] = $_SERVER['SERVER_NAME'] = 'admin.site.com';
                     $_SERVER['REQUEST_URI'] = '/news/';
-                    $_GET['test'] = 'foo';
+                    $_SERVER['QUERY_STRING'] = 'test=foo';
                     $_POST['_method'] = null;
                 },
                 [
@@ -411,7 +416,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 ],
                 Route::GET,
                 null,
-                'success0newsaction'
+                'newsactionsuccess0'
             ],
 
             [
@@ -438,7 +443,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                         }
                     ]
                 ],
-                'success_behaviorsuccess0action'
+                'success_behavioractionsuccess0'
             ],
 
             [
@@ -453,7 +458,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 function () {
                     return true;
                 },
-                'success0action'
+                'actionsuccess0'
             ],
         ];
     }
@@ -541,7 +546,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                     $_SERVER['HTTP_HOST'] = $_SERVER['SERVER_NAME'] = 'site.com';
                     $_SERVER['REQUEST_URI'] = '/news/';
                     $_POST['_method'] = null;
-                    $_GET['test'] = 'bar';
+                    $_SERVER['QUERY_STRING'] = 'test=bar';
                 },
                 [
                     Route::FILTER_HOST => 'site.com',
@@ -652,7 +657,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         ));
         $route->run();
         $this->assertSame(0, $route->getErrors());
-        $this->expectOutputString('total_success0action3');
+        $this->expectOutputString('action3total_success0');
     }
 
     public function testMultiRulesFail()
@@ -742,11 +747,11 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     public function providerRESTSuccess()
     {
         return [
-            ['/orders/', null, '@orders.index', '/orders/', 'success0index'],
-            ['/orders/77/', 'PUT', '@orders.update', '/orders/{id}/', 'success0update'],
-            ['/orders/77/', 'PATCH', '@orders.update', '/orders/{id}/', 'success0update'],
-            ['/orders/77/', null, '@orders.show', '/orders/{id}/', 'success0show'],
-            ['/orders/', 'POST', '@orders.create', '/orders/', 'success0create'],
+            ['/orders/', null, '@orders.index', '/orders/', 'indexsuccess0'],
+            ['/orders/77/', 'PUT', '@orders.update', '/orders/{id}/', 'updatesuccess0'],
+            ['/orders/77/', 'PATCH', '@orders.update', '/orders/{id}/', 'updatesuccess0'],
+            ['/orders/77/', null, '@orders.show', '/orders/{id}/', 'showsuccess0'],
+            ['/orders/', 'POST', '@orders.create', '/orders/', 'createsuccess0'],
         ];
     }
 
@@ -862,8 +867,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         $this->assertFalse($cache->exists(Route::className()));
 
         $_SERVER['REQUEST_URI'] = '/bar/test';
-        $_GET['query'] = '';
-        $_GET['view'] = 'all-views';
+        $_SERVER['QUERY_STRING'] = 'query=&view=all-views';
         $route = (new Route(
             [
                 'rules' =>

@@ -42,7 +42,7 @@ class RouteTest extends RouteConfigTest
     {
         $_SERVER['HTTP_HOST'] = $_SERVER['SERVER_NAME'] = $host;
         $_SERVER['REQUEST_URI'] = $path;
-        $_GET = $get;
+        $_SERVER['QUERY_STRING'] = $get;
 
         $handler = function(Route $route) use ($rule, $params) {
             $handler = function(Route $route) use ($params){
@@ -104,8 +104,7 @@ class RouteTest extends RouteConfigTest
     public function testPatternAsArraySuccess()
     {
         $_SERVER['REQUEST_URI'] = '/bar/test';
-        $_GET['query'] = '';
-        $_GET['view'] = 'all-views';
+        $_SERVER['QUERY_STRING'] = 'query=&view=all-views';
 
         $handler = function(Route $route){
             $this->assertEquals(['name' => 'test', 'order' => 'all'], $route->getParams());
@@ -135,8 +134,14 @@ class RouteTest extends RouteConfigTest
     public function testPatternAsArrayFail($path, $query, $getView, $method, $output = null)
     {
         $_SERVER['REQUEST_URI'] = $path;
-        $_GET['query'] = $query;
-        $_GET['view'] = $getView;
+        $get = [];
+        if (isset($getView)) {
+            $get['view'] = $getView;
+        }
+        if (isset($query)) {
+            $get['query'] = $query;
+        }
+        $_SERVER['QUERY_STRING'] = http_build_query($get);
 
         $route = new Route();
         $route->addRoute(
