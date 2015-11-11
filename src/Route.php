@@ -66,27 +66,43 @@ REGEX;
      * @var array
      */
     public $groups = [];
-    /** @var  callable */
+    /**
+     * List REST handlers.
+     * @var array
+     */
+    protected $RESTHandlers = [];
+    /**
+     * @var callable
+     */
     public $success;
-    /** @var  callable */
+    /**
+     * @var callable
+     */
     public $fail;
-    public $RESTHandlers = [];
+    /**
+     * List sanitize rules by default.
+     * @var array
+     */
     public $sanitizeRules = ['removeTags', 'trim', ['call' => 'urldecode'], 'toType'];
     /**
-     * Request instance.
+     * Instance Rock Request.
      * @var  Request|string|array
      */
     public $request = 'request';
     /**
-     * Response instance.
+     * Instance Rock Response.
      * @var Response
      */
     public $response;
     /**
-     * Cache instance.
+     * Instance Rock Cache.
      * @var CacheInterface
      */
     public $cache = 'cache';
+    /**
+     * Enabled caching rules.
+     * @var boolean
+     */
     public $enableCache = false;
 
     /** @var  array */
@@ -108,9 +124,19 @@ REGEX;
         }
         $this->cache = Instance::ensure($this->cache, null, [], false);
 
-        $this->calculateData();
-        $handlers = $this->defaultRESTHandlers();
-        $this->RESTHandlers = empty($this->RESTHandlers) ? $handlers : array_merge($handlers, $this->RESTHandlers);
+        $this->data = parse_url($this->request->getAbsoluteUrl());
+        $this->RESTHandlers = array_merge($this->defaultRESTHandlers(), $this->RESTHandlers);
+    }
+
+    /**
+     * Sets a REST handlers.
+     * @param array $handlers
+     * @return $this
+     */
+    public function setRESTHandlers(array $handlers)
+    {
+        $this->RESTHandlers = array_merge($this->RESTHandlers, $handlers);
+        return $this;
     }
 
     public function run($new = false)
@@ -1084,11 +1110,6 @@ REGEX;
             default:
                 throw new RouteException(RouteException::UNKNOWN_FORMAT, ['format' => $key]);
         }
-    }
-
-    protected function calculateData()
-    {
-        $this->data = parse_url($this->request->getAbsoluteUrl());
     }
 
     protected function isRegExp($value)
