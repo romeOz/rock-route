@@ -3,8 +3,8 @@
 namespace rock\route\filters;
 
 
-use rock\access\Access;
-use rock\helpers\Instance;
+use rock\access\AccessErrorInterface;
+use rock\filters\AccessTrait;
 use rock\route\RouteEvent;
 
 /**
@@ -43,22 +43,15 @@ use rock\route\RouteEvent;
  * }
  * ```
  */
-class AccessFilter extends RouteFilter
+class AccessFilter extends RouteFilter implements AccessErrorInterface
 {
-    public $rules = [];
+    use AccessTrait;
 
     public function before()
     {
-        $config = [
-            'class' => Access::className(),
-            'owner' => $this->owner,
-            'rules' => $this->rules,
-        ];
-        /** @var Access $access */
-        $access = Instance::ensure($config);
-        if (!$access->checkAccess()) {
+        if (!$this->check()) {
             if ($this->event instanceof RouteEvent) {
-                $this->event->errors |= $access->errors;
+                $this->event->errors |= $this->errors;
             }
             return false;
         }
