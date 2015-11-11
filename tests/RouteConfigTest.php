@@ -814,33 +814,40 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         $this->assertFalse($cache->exists(Route::className()));
 
         $_SERVER['REQUEST_URI'] = '/ajax/news/7/';
-        $route = (new Route([
-            'groups' => [
-                [
-                    Route::ANY,
-                    '/ajax/{url:.+}',
-                    'path' => '/ajax/',
-                    'rules' => [
-                        'foo' => [
-                            Route::GET,
-                            '/news/{id:\d+}/',
-                            function (Route $route) {
-                                $this->assertEquals(7, $route['id']);
-                                $this->assertSame('news/7/', $route['url']);
-                                return 'success';
-                            }
-                        ],
-                    ]
-                ],
-
+        $groups = [
+            [
+                Route::ANY,
+                '/ajax/{url:.+}',
+                'path' => '/ajax/',
+                'rules' => [
+                    'foo' => [
+                        Route::GET,
+                        '/news/{id:\d+}/',
+                        function (Route $route) {
+                            $this->assertEquals(7, $route['id']);
+                            $this->assertSame('news/7/', $route['url']);
+                            return 'success';
+                        }
+                    ],
+                ]
             ],
+
+        ];
+        $route = (new Route([
+            'groups' => $groups,
             'cache' => $cache,
             'enableCache' => true
         ]));
         $route->run();
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
-        $this->assertTrue($cache->exists(Route::className()));
+        $this->assertCount(2, $cache->get(Route::className()));
+
         Alias::$aliases = [];
+        $route = (new Route([
+            'groups' => $groups,
+            'cache' => $cache,
+            'enableCache' => true
+        ]));
         $route->run();
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
         $this->expectOutputString('successsuccess');
@@ -868,32 +875,37 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
 
         $_SERVER['REQUEST_URI'] = '/bar/test';
         $_SERVER['QUERY_STRING'] = 'query=&view=all-views';
-        $route = (new Route(
-            [
-                'rules' =>
-                    [
-                        'bar' => [
-                            Route::GET,
-                            [
-                                Route::FILTER_PATH => '/bar/{name}',
-                                Route::FILTER_GET => ['query' => true, 'view' => '{order}-views'],
 
-                            ],
-                            function (Route $route) {
-                                $this->assertEquals(['name' => 'test', 'order' => 'all'], $route->getParams());
-                                return 'success';
-                            }
-                        ],
-                    ],
-                'cache' => $cache,
-                'enableCache' => true
-            ]
+        $rules = [
+            'bar' => [
+                Route::GET,
+                [
+                    Route::FILTER_PATH => '/bar/{name}',
+                    Route::FILTER_GET => ['query' => true, 'view' => '{order}-views'],
 
-        ));
+                ],
+                function (Route $route) {
+                    $this->assertEquals(['name' => 'test', 'order' => 'all'], $route->getParams());
+                    return 'success';
+                }
+            ],
+        ];
+        $route = (new Route([
+            'rules' => $rules,
+            'cache' => $cache,
+            'enableCache' => true
+        ]));
         $route->run();
         $this->assertSame('/bar/text?view={order}-views', Alias::getAlias('@bar', ['name' => 'text']));
         $this->assertTrue($cache->exists(Route::className()));
+
         Alias::$aliases = [];
+
+        $route = (new Route([
+            'rules' => $rules,
+            'cache' => $cache,
+            'enableCache' => true
+        ]));
         $route->run();
         $this->assertSame('/bar/text?view={order}-views', Alias::getAlias('@bar', ['name' => 'text']));
         $this->expectOutputString('successsuccess');

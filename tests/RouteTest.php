@@ -320,8 +320,15 @@ class RouteTest extends RouteConfigTest
 
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
         $this->assertSame(0, $route->getErrors());
-        $this->assertTrue($cache->exists(Route::className()));
+        $this->assertCount(2, $cache->get(Route::className()));
+
         Alias::$aliases = [];
+
+        $route = new Route([
+            'cache' => $cache,
+            'enableCache' => true
+        ]);
+        $route->group(Route::ANY, '/ajax/{url:.+}', $handler, ['path' => '/ajax/']);
         $route->run();
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
         $this->expectOutputString('successsuccess');
@@ -357,7 +364,14 @@ class RouteTest extends RouteConfigTest
         $route->run();
         $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
         $this->assertTrue($cache->exists(Route::className()));
+
         Alias::$aliases = [];
+
+        $route = new Route([
+            'cache' => $cache,
+            'enableCache' => true
+        ]);
+        $route->get('/news/{id:\d+}/', $handler, ['as' => 'foo']);
         $route->run();
         $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
         $this->expectOutputString('successsuccess');

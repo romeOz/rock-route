@@ -9,8 +9,6 @@ if (is_file($composerAutoload)) {
 
 $loader->addPsr4('rockunit\\', __DIR__);
 
-date_default_timezone_set('UTC');
-
 defined('ROCKUNIT_RUNTIME') or define('ROCKUNIT_RUNTIME', __DIR__ . '/runtime');
 Alias::setAlias('rockunit', __DIR__);
 
