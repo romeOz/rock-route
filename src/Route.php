@@ -108,6 +108,8 @@ REGEX;
     /** @var  array */
     protected $data = [];
     protected $params = [];
+    protected $rawGroups = [];
+    protected $rawRules = [];
     protected $errors = 0;
 
     public function init()
@@ -152,9 +154,9 @@ REGEX;
         }
         Event::trigger($route, self::EVENT_BEGIN_ROUTER);
         if (!empty($route->groups)) {
-            $check = $route->checkGroups($route->getGroups());
+            $check = $route->checkGroups($route->getRawGroups());
         } else {
-            $check = $route->checkRules($route->getRules());
+            $check = $route->checkRules($route->getRawRules());
         }
         if ($check) {
             $this->successInternal();
@@ -413,7 +415,8 @@ REGEX;
                 $config['url'] .=  "?{$params['query']}";
             }
         }
-        $config['class'] = Request::className();
+        $request = $this->request;
+        $config['class'] = $request::className();
         /** @var Request $request */
         $request = Instance::ensure($config);
 
@@ -447,6 +450,7 @@ REGEX;
     }
 
     /**
+     * Returns a errors.
      * @return int
      */
     public function getErrors()
@@ -1120,59 +1124,91 @@ REGEX;
         return true;
     }
 
-    protected function getGroups()
+    protected function getRawGroups()
     {
+        if (!empty($this->rawGroups)) {
+            return $this->rawGroups;
+        }
         if ($this->enableCache && isset($this->cache)) {
             if (($data = $this->cache->get(static::className())) !== false) {
-                list($groups, $aliases) = $data;
+                list($rawGroups, $aliases) = $data;
                 Alias::setAliases($this->prepareAliases($aliases), false);
-                $groups = array_merge_recursive($groups, $this->groups);
-                array_shift($groups);
-                return $this->groups = $groups;
+                $rawGroups = $this->calculateCacheGroups($rawGroups, $this->groups);
+                return $this->rawGroups = $rawGroups;
             }
         }
-        list($groups, $aliases) = $this->normalizeGroups($this->groups);
+        list($rawGroups, $aliases) = $this->normalizeGroups($this->groups);
         if ($this->enableCache && isset($this->cache))  {
-            $this->cache->set(static::className(), [$this->calculateCacheGroups($groups), $aliases]);
+            $this->cache->set(static::className(), [$this->normalizeCacheGroups($rawGroups), $aliases]);
         }
-        return $this->groups = $groups;
+        return $this->rawGroups = $rawGroups;
     }
 
-    protected function getRules()
+    protected function getRawRules()
     {
+        if (!empty($this->rawRules)) {
+            return $this->rawRules;
+        }
         if ($this->enableCache && isset($this->cache)) {
             if (($data = $this->cache->get(static::className())) !== false) {
-                list($rules, $aliases) = $data;
+                list($rawRules, $aliases) = $data;
                 Alias::setAliases($this->prepareAliases($aliases), false);
-                $rules = array_merge($rules, $this->rules);
-                return $this->rules = $rules;
+                $rawRules = $this->calculateCacheRules($rawRules, $this->rules);
+                return $this->rawRules = $rawRules;
             }
         }
 
-        $rules = $aliases = [];
-        $this->normalizeRules($rules, $aliases, $this->rules);
+        $rawRules = $aliases = [];
+        $this->normalizeRules($rawRules, $aliases, $this->rules);
         if ($this->enableCache && isset($this->cache))  {
-            $this->cache->set(static::className(), [$this->calculateCacheRules($rules), $aliases]);
+            $this->cache->set(static::className(), [$this->normalizeCacheRules($rawRules), $aliases]);
         }
-        return $this->rules = $rules;
+        return $this->rawRules = $rawRules;
     }
 
-    protected function calculateCacheGroups($groups)
+    protected function normalizeCacheGroups(array $groups)
     {
         foreach ($groups as &$group) {
             unset($group['filters']);
-            $group['rules'] = $this->calculateCacheRules($group['rules']);
+            $group['rules'] = $this->normalizeCacheRules($group['rules']);
         }
         return $groups;
     }
 
-    protected function calculateCacheRules($rules)
+    protected function normalizeCacheRules($rules)
     {
         foreach ($rules as &$rule) {
             unset($rule[2], $rule['filters']);
         }
 
         return $rules;
+    }
+
+    protected function calculateCacheGroups(array $rawGroups, array $groups = [])
+    {
+        foreach ($rawGroups as $key => &$group) {
+            if (isset($groups[$key])) {
+                if (isset($groups[$key]['filters'])) {
+                    $group['filters'] = $groups[$key]['filters'];
+                }
+
+                $group['rules'] = $this->calculateCacheRules($group['rules'], $groups[$key]['rules']);
+            }
+        }
+        return $rawGroups;
+    }
+
+    protected function calculateCacheRules(array $rawRules, $rules)
+    {
+        foreach ($rawRules as $key => &$rule) {
+            if (isset($rules[$key][2])) {
+                $rule[2] = $rules[$key][2];
+                if (isset($rules[$key]['filters'])) {
+                    $rule['filters'] = $rules[$key]['filters'];
+                }
+            }
+        }
+        return $rawRules;
     }
 
     private function prepareAliases(array $aliases)
