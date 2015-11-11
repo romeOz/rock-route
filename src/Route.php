@@ -21,10 +21,9 @@ use rock\request\RequestInterface;
 use rock\response\Response;
 use rock\sanitize\Sanitize;
 
-class Route implements RequestInterface, Requestable, ErrorsInterface, ComponentsInterface, \ArrayAccess
+class Route implements RequestInterface, Requestable, ComponentsInterface, \ArrayAccess
 {
     use ComponentsTrait;
-    use ErrorsTrait;
 
     const VARIABLE_REGEX = <<<'REGEX'
 \{
@@ -49,6 +48,14 @@ REGEX;
     const FILTER_POST = 'post';
     const FILTER_PUT = 'put';
     const FILTER_DELETE = 'delete';
+
+    const E_IPS = 1;
+    const E_USERS = 2;
+    const E_ROLES = 4;
+    const E_CUSTOM = 8;
+    const E_VERBS = 16;
+    const E_NOT_FOUND = 32;
+
     /**
      * List of rules of the route.
      * @var array
@@ -411,6 +418,44 @@ REGEX;
             return $route->response;
         }
         return null;
+    }
+
+    /**
+     * @return int
+     */
+    public function getErrors()
+    {
+        return $this->errors;
+    }
+
+    public function isErrorVerbs()
+    {
+        return (bool)(self::E_VERBS & $this->errors);
+    }
+
+    public function isErrorUsers()
+    {
+        return (bool)(self::E_USERS & $this->errors);
+    }
+
+    public function isErrorRoles()
+    {
+        return (bool)(self::E_ROLES & $this->errors);
+    }
+
+    public function isErrorIps()
+    {
+        return (bool)(self::E_IPS & $this->errors);
+    }
+
+    public function isErrorCustom()
+    {
+        return (bool)(self::E_CUSTOM & $this->errors);
+    }
+
+    public function isErrorNotFound()
+    {
+        return (bool)(self::E_NOT_FOUND & $this->errors);
     }
 
     /**
