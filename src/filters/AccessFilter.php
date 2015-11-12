@@ -3,8 +3,8 @@
 namespace rock\route\filters;
 
 
-use rock\filters\AccessErrorInterface;
 use rock\filters\AccessTrait;
+use rock\route\Route;
 use rock\route\RouteEvent;
 
 /**
@@ -43,9 +43,24 @@ use rock\route\RouteEvent;
  * }
  * ```
  */
-class AccessFilter extends RouteFilter implements AccessErrorInterface
+class AccessFilter extends RouteFilter
 {
-    use AccessTrait;
+    use AccessTrait {
+        AccessTrait::check as parentCheck;
+    }
+    /**
+     * @var array
+     */
+    public $rules = [];
+    /**
+     * Sending response headers. `true` by default.
+     * @var bool
+     */
+    public $sendHeaders = false;
+    /**
+     * @var int
+     */
+    protected $errors = 0;
 
     public function before()
     {
@@ -57,5 +72,73 @@ class AccessFilter extends RouteFilter implements AccessErrorInterface
         }
 
         return parent::before();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function check()
+    {
+        if ($this->parentCheck()) {
+            $this->errors = 0;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Returns a errors.
+     * @return int
+     */
+    public function getErrors()
+    {
+        return $this->errors;
+    }
+
+    /**
+     * Checks a username, role and ip.
+     * @param array $rule array data of access
+     * @return bool|null
+     */
+    protected function matches(array $rule)
+    {
+        $rule['allow'] = (bool)$rule['allow'];
+        $result = [];
+        if (isset($rule['users'])) {
+            $result[] = $this->addError($this->matchUsers((array)$rule['users']), Route::E_USERS, $rule['allow']);
+        }
+        if (isset($rule['ips'])) {
+            $result[] = $this->addError($this->matchIps((array)$rule['ips']),  Route::E_IPS, $rule['allow']);
+        }
+        if (isset($rule['roles'])) {
+            $result[] = $this->addError($this->matchRole((array)$rule['roles']),  Route::E_ROLES, $rule['allow']);
+        }
+        if (isset($rule['custom'])) {
+            $result[] = $this->addError($this->matchCustom($rule),  Route::E_CUSTOM, $rule['allow']);
+        }
+        if (empty($result)) {
+            return null;
+        }
+        if (in_array(false, $result, true)) {
+            return null;
+        }
+
+        return $rule['allow'];
+    }
+
+    /**
+     * Adds a error.
+     * @param bool $is
+     * @param int $error
+     * @param bool $allow
+     * @return bool
+     */
+    protected function addError($is, $error, $allow)
+    {
+        if ($is === false || $allow === false) {
+            $this->errors |= $error;
+        }
+
+        return $is;
     }
 }
