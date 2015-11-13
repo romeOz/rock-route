@@ -34,7 +34,7 @@ Table of Contents
  * [Alias for route](#alias-for-route)
  * [Using response](#using-response)
  * [Inject arguments](#inject-arguments)
- * [HMVC](#hmvc)
+ * [HMVC](#hmvc-hierarchical-modelviewcontroller)
     - [Local](#local)
     - [Remote](#remote)
  * [Caching rules](#caching-rules)
