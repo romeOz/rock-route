@@ -3,8 +3,15 @@
 namespace rockunit;
 
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Response;
 use rock\base\Alias;
 use rock\request\Request;
+use rock\route\filters\RateLimiter;
+use rock\route\providers\Local;
 use rock\route\Route;
 
 /**
@@ -32,7 +39,7 @@ class RouteTest extends RouteConfigTest
 
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
         $this->assertSame(0, $route->getErrors());
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
     /**
@@ -59,7 +66,7 @@ class RouteTest extends RouteConfigTest
 
         $this->assertSame($alias, Alias::getAlias('@foo'));
         $this->assertSame(0, $route->getErrors());
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
     /**
@@ -98,7 +105,7 @@ class RouteTest extends RouteConfigTest
         $route->run();
 
         $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
     public function testPatternAsArraySuccess()
@@ -122,9 +129,8 @@ class RouteTest extends RouteConfigTest
         );
         $route->run();
 
-
         $this->assertSame('/bar/text?view={order}-views', Alias::getAlias('@bar', ['name' => 'text']));
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
 
@@ -190,7 +196,8 @@ class RouteTest extends RouteConfigTest
             )
             ->success(
                 function (Route $route) {
-                    echo 'success' . $route->getErrors();
+                    $this->assertSame(0, $route->getErrors());
+                    echo 'success';
                 }
             )
             ->fail(
@@ -244,7 +251,8 @@ class RouteTest extends RouteConfigTest
         $route = (new Route)
             ->success(
                 function (Route $route) {
-                    echo 'success' . $route->getErrors();
+                    $this->assertSame(0, $route->getErrors());
+                    echo 'success';
                 }
             )->fail(
                 function (Route $route) {
@@ -294,6 +302,231 @@ class RouteTest extends RouteConfigTest
         $this->expectOutputString($output);
     }
 
+    public function testRouteLocalRulesSuccess()
+    {
+        $_SERVER['REQUEST_URI'] = '/news/7/';
+
+        $handler = function(Route $route){
+            $this->assertEquals(7, $route['id']);
+            return 'success';
+        };
+        $route = new Route();
+        $route->get('/news/{id:\d+}/', $handler, ['as' => 'foo']);
+        $filters = [
+            Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+            Route::FILTER_GET => [
+                'view' => 'all',
+                'query' => ''
+            ]
+        ];
+        $handler = function (Route $route) {
+            $this->assertEquals(2, $route['id']);
+            return 'barsuccess';
+        };
+        $route->get($filters, $handler, ['as' => 'bar']);
+        $route->run();
+
+        $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
+        $this->assertSame('success', $route->response->data);
+
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=all&query=');
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none', ['query' => ['view' => 'all', 'query' => '']]);
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+    }
+
+    public function testRouteLocalRulesFail()
+    {
+        $_SERVER['REQUEST_URI'] = '/news/7/';
+
+        $handler = function(Route $route){
+            $this->assertEquals(7, $route['id']);
+            return 'success';
+        };
+        $route = new Route();
+        $route->get('/news/{id:\d+}/', $handler, ['as' => 'foo']);
+        $filters = [
+            Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+            Route::FILTER_GET => [
+                'view' => 'all',
+                'query' => ''
+            ]
+        ];
+        $handler = function (Route $route) {
+            $this->assertEquals(2, $route['id']);
+            return 'barsuccess';
+        };
+        $route->get($filters, $handler, ['as' => 'bar']);
+        $route->run();
+
+        $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
+        $this->assertSame('success', $route->response->data);
+
+        // null
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=all');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none&query=');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none', ['query' => ['view' => 'all']]);
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none', ['query' => ['view' => 'none', 'query' => '']]);
+        $this->assertNull($response);
+    }
+
+    public function testRouteLocalGroupsSuccess()
+    {
+        $_SERVER['REQUEST_URI'] = '/ajax/news/7/';
+
+        $handler = function(Route $route) {
+            $handler = function(Route $route){
+                $this->assertEquals(7, $route['id']);
+                $this->assertSame('news/7/', $route['url']);
+                return 'success';
+            };
+            $route->get('/news/{id:\d+}/', $handler, ['as' => 'foo']);
+            return $route;
+        };
+        $route = new Route();
+        $route->group(Route::ANY, '/ajax/{url:.+}', $handler, ['path' => '/ajax/']);
+
+        $handler = function(Route $route) {
+            $handler = function(Route $route){
+                $this->assertEquals(2, $route['id']);
+                return 'barsuccess';
+            };
+            $filters = [
+                Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+                Route::FILTER_GET => [
+                    'view' => 'all',
+                    'query' => ''
+                ]
+            ];
+            $route->get($filters, $handler, ['bar' => 'foo']);
+            return $route;
+        };
+        $route->group(Route::GET, [Route::FILTER_HOST =>  'admin.site.com',], $handler);
+        $route->run();
+
+        $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
+        $this->assertSame(0, $route->getErrors());
+        $this->assertSame('success', $route->response->data);
+
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=all&query=');
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://admin.site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none', ['query' => ['view' => 'all', 'query' => '']]);
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://admin.site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+    }
+
+    public function testRouteLocalGroupsFail()
+    {
+        $_SERVER['REQUEST_URI'] = '/ajax/news/7/';
+
+        $handler = function(Route $route) {
+            $handler = function(Route $route){
+                $this->assertEquals(7, $route['id']);
+                $this->assertSame('news/7/', $route['url']);
+                return 'success';
+            };
+            $route->get('/news/{id:\d+}/', $handler, ['as' => 'foo']);
+            return $route;
+        };
+        $route = new Route();
+        $route->group(Route::ANY, '/ajax/{url:.+}', $handler, ['path' => '/ajax/']);
+
+        $handler = function(Route $route) {
+            $handler = function(Route $route){
+                $this->assertEquals(2, $route['id']);
+                return 'barsuccess';
+            };
+            $filters = [
+                Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+                Route::FILTER_GET => [
+                    'view' => 'all',
+                    'query' => ''
+                ]
+            ];
+            $route->get($filters, $handler, ['bar' => 'foo']);
+            return $route;
+        };
+        $route->group(Route::GET, [Route::FILTER_HOST =>  'admin.site.com',], $handler);
+        $route->run();
+
+        $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
+        $this->assertSame(0, $route->getErrors());
+        $this->assertSame('success', $route->response->data);
+
+        // null
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=all');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=all');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none&query=');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none', ['query' => ['view' => 'all']]);
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none', ['query' => ['view' => 'none', 'query' => '']]);
+        $this->assertNull($response);
+    }
+
+    public function testRouteRemote()
+    {
+        $mock = new MockHandler([
+            new Response(200, [], 'foo')
+        ]);
+
+        $handler = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handler]);
+
+        $response = (new \rock\route\providers\Remote(['client' => $client]))
+            ->send('http://ajax.site.com/bar/2/?view=all&query=');
+        $this->assertSame('ajax.site.com', $response->request->getHost());
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('foo', $response->getContent());
+
+        $mock = new MockHandler([
+            new ClientException(
+                "Error Communicating with Server",
+                new \GuzzleHttp\Psr7\Request('GET', 'test'),
+                new Response(404, [], 'bar')
+            )
+        ]);
+
+        $handler = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handler]);
+
+        $response = (new \rock\route\providers\Remote(['client' => $client]))
+            ->send('http://ajax.site.com/bar/2/?view=all&query=');
+        $this->assertSame('ajax.site.com', $response->request->getHost());
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertSame('bar', $response->getContent());
+
+        // null
+        $mock = new MockHandler([
+            new ClientException(
+                "Error Communicating with Server",
+                new \GuzzleHttp\Psr7\Request('GET', 'test')
+            )
+        ]);
+        $handler = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handler]);
+        $response = (new \rock\route\providers\Remote(['client' => $client]))
+            ->send('http://ajax.site.com/bar/2/?view=all&query=');
+        $this->assertNull($response);
+    }
 
     public function testCacheGroup()
     {
@@ -321,6 +554,7 @@ class RouteTest extends RouteConfigTest
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
         $this->assertSame(0, $route->getErrors());
         $this->assertCount(2, $cache->get(Route::className()));
+        $this->assertSame('success', $route->response->data);
 
         Alias::$aliases = [];
 
@@ -331,7 +565,7 @@ class RouteTest extends RouteConfigTest
         $route->group(Route::ANY, '/ajax/{url:.+}', $handler, ['path' => '/ajax/']);
         $route->run();
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
-        $this->expectOutputString('successsuccess');
+        $this->assertSame('success', $route->response->data);
     }
 
     /**
@@ -364,6 +598,7 @@ class RouteTest extends RouteConfigTest
         $route->run();
         $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
         $this->assertTrue($cache->exists(Route::className()));
+        $this->assertSame('success', $route->response->data);
 
         Alias::$aliases = [];
 
@@ -374,7 +609,46 @@ class RouteTest extends RouteConfigTest
         $route->get('/news/{id:\d+}/', $handler, ['as' => 'foo']);
         $route->run();
         $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
-        $this->expectOutputString('successsuccess');
+        $this->assertSame('success', $route->response->data);
+    }
+
+    public function testRateLimiterFilter()
+    {
+        $_SERVER['REQUEST_URI'] = '/';
+        $_SESSION = [];
+
+        $filters = [
+            'rate' => [
+                'class' => RateLimiter::className(),
+                'limit' => 2,
+                'period' => 2,
+                'sendHeaders' => true
+            ]
+        ];
+        $route = new Route();
+        $route->any('/', function () {echo 'foo';}, ['filters' => $filters]);
+        $route->success(function (Route $route) {
+            $this->assertSame(0, $route->getErrors());
+            echo 'success';
+        });
+        $route->fail(function (Route $route) {
+            $this->assertSame(Route::E_RATE_LIMIT, $route->getErrors());
+            echo 'fail';
+        });
+        $route->run();
+
+        $this->assertSame($_SESSION['_allowance'][Route::className()]["maxRequests"], 1);
+        $route->run();
+        $this->assertSame($_SESSION['_allowance'][Route::className()]["maxRequests"], 0);
+        $route->run();
+        $this->assertSame(2, $route->response->getHeaders()->get('x-rate-limit-limit'));
+        $this->assertSame(429, $route->response->getStatusCode());
+        sleep(4);
+        $route->run();
+        $this->assertSame($_SESSION['_allowance'][Route::className()]["maxRequests"], 1);
+
+        $_SESSION = [];
+        $this->expectOutputString('successfoosuccessfoofailsuccessfoo');
     }
 }
  

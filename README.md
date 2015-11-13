@@ -34,6 +34,9 @@ Table of Contents
  * [Alias for route](#alias-for-route)
  * [Using response](#using-response)
  * [Inject arguments](#inject-arguments)
+ * [HMVC](#hmvc)
+    - [Local](#local)
+    - [Remote](#remote)
  * [Caching rules](#caching-rules)
  * [Requirements](#requirements)
 
@@ -419,6 +422,48 @@ class ItemsController
 
 More flexible use is possible using the library [Rock DI](https://github.com/romeOz/rock-di): `composer require romeoz/rock-di`.
 
+[HMVC (Hierarchical model–view–controller)](https://en.wikipedia.org/wiki/Hierarchical_model-view-controller)
+------------------
+
+For using you must be installed [Rock Response](https://github.com/romeOz/rock-response):  `composer require romeoz/rock-response`.
+
+####Local
+
+```php
+// url: http://site.com/news/7/        
+
+$route = new Route();
+ 
+$handler = function(Route $route){
+    return 'hello';
+};
+       
+$route->get('/foo/{id:\d+}/', $handler);
+$route->post('/bar/{id:\d+}', ['\namespace\BarController', 'actionIndex']);
+$route->run();
+
+class BarController
+{
+    public function actionIndex(\rock\route\Route $route)
+    {        
+        $response = (new \rock\route\providers\Local(['route' => $route]))->send('http://site.com/foo/11/');
+        return $response->getContent() . ' world!';
+    }
+}
+
+// output: 'hello world!'
+```
+
+####Remote
+
+For using you must be installed [Guzzle](https://github.com/guzzle/guzzle): `composer require guzzlehttp/guzzle:6.1.*`.
+
+>Required PHP 5.5+
+
+```php
+$response = (new \rock\route\providers\Remote())->send('http://site.com/foo/11/');
+```
+
 Caching rules
 ------------------
 
@@ -441,10 +486,14 @@ $route->flushCache();
 
 Requirements
 -------------------
- * PHP 5.4+
- * For using filters required [Rock Filters](https://github.com/romeOz/rock-filters): `composer require romeoz/rock-filters`
+ * **PHP 5.4+**
  * For using response required [Rock Response](https://github.com/romeOz/rock-response): `composer require romeoz/rock-response`
+ * For using filters required [Rock Filters](https://github.com/romeOz/rock-filters): `composer require romeoz/rock-filters`
+ * For using Rate Limiter filter required [Rock Session](https://github.com/romeOz/rock-session): `composer require romeoz/rock-session`
  * For caching rules required [Rock Cache](https://github.com/romeOz/rock-cache): `composer require romeoz/rock-cache`
+ * For using HMVC remote required [Guzzle](https://github.com/guzzle/guzzle): `composer require guzzlehttp/guzzle:6.1.*`.
+
+>All unbolded dependencies is optional.
 
 License
 -------------------

@@ -6,6 +6,8 @@ use rock\base\Alias;
 use rock\cache\Memcached;
 use rock\request\Request;
 use rock\route\filters\AccessFilter;
+use rock\route\filters\RateLimiter;
+use rock\route\providers\Local;
 use rock\route\Route;
 
 /**
@@ -48,7 +50,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     public function testGroupPattern()
     {
         $_SERVER['REQUEST_URI'] = '/ajax/news/7/';
-        (new Route([
+        $route = (new Route([
             'groups' => [
                 [
                     Route::ANY,
@@ -68,9 +70,10 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 ]
 
             ],
-        ]))->run();
+        ]));
+        $route->run();
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
     /**
@@ -106,7 +109,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
 
         $this->assertSame($alias, Alias::getAlias('@foo'));
         $this->assertSame(0, $route->getErrors());
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
     public function providerGroupPatternAsArraySuccess()
@@ -178,7 +181,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     public function testPatternSuccess()
     {
         $_SERVER['REQUEST_URI'] = '/news/7/';
-        (new Route([
+        $route = (new Route([
             'rules' => [
                 'foo' => [
                     Route::GET,
@@ -189,17 +192,18 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                     }
                 ],
             ],
-        ]))->run();
+        ]));
+        $route->run();
 
         $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
     public function testPatternAsArraySuccess()
     {
         $_SERVER['REQUEST_URI'] = '/bar/test';
         $_SERVER['QUERY_STRING'] = 'query=&view=all-views';
-        (new Route(
+        $route = (new Route(
             [
                 'rules' =>
                     [
@@ -219,10 +223,10 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
 
             ]
 
-        ))
-            ->run();
+        ));
+        $route->run();
         $this->assertSame('/bar/text?view={order}-views', Alias::getAlias('@bar', ['name' => 'text']));
-        $this->expectOutputString('success');
+        $this->assertSame('success', $route->response->data);
     }
 
 
@@ -240,7 +244,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
             $get['query'] = $query;
         }
         $_SERVER['QUERY_STRING'] = http_build_query($get);
-        (new Route(
+        $route = (new Route(
             [
                 'rules' =>
                     [
@@ -263,8 +267,8 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
 
             ]
 
-        ))
-            ->run();
+        ));
+        $route->run();
         $this->expectOutputString($output);
     }
 
@@ -294,7 +298,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     {
         $_POST['_method'] = 'GET';
         $_SERVER['REQUEST_URI'] = '/';
-        (new Route(
+        $route = (new Route(
 
             [
                 'rules' =>
@@ -308,9 +312,8 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
 
             ]
 
-        ))
-            ->run();
-
+        ));
+        $route->run();
         $this->expectOutputString(Request::className());
     }
 
@@ -338,7 +341,8 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                     ],
                 'success' =>
                     function (Route $route) {
-                        echo 'success' . $route->getErrors();
+                        $this->assertSame(0, $route->getErrors());
+                        echo 'success';
                     }
                 ,
                 'fail' =>
@@ -366,7 +370,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/',
                 Route::GET,
                 null,
-                'actionsuccess0'
+                'successaction'
             ],
             [
                 function () {
@@ -377,7 +381,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/',
                 [Route::PUT],
                 null,
-                'actionsuccess0'
+                'successaction'
             ],
             [
                 function () {
@@ -388,7 +392,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/',
                 Route::ANY,
                 null,
-                'actionsuccess0'
+                'successaction'
             ],
             [
 
@@ -400,7 +404,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 '/{controller:(?:news|tags)}/',
                 Route::GET,
                 null,
-                'tagsactionsuccess0'
+                'successtagsaction'
             ],
             [
                 function () {
@@ -416,7 +420,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 ],
                 Route::GET,
                 null,
-                'newsactionsuccess0'
+                'successnewsaction'
             ],
 
             [
@@ -443,7 +447,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                         }
                     ]
                 ],
-                'success_behavioractionsuccess0'
+                'success_behaviorsuccessaction'
             ],
 
             [
@@ -458,7 +462,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                 function () {
                     return true;
                 },
-                'actionsuccess0'
+                'successaction'
             ],
         ];
     }
@@ -644,7 +648,8 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                     ],
                 'success' =>
                     function (Route $route) {
-                        echo 'total_success' . $route->getErrors();
+                        $this->assertSame(0, $route->getErrors());
+                        echo 'total_success';
                     }
                 ,
                 'fail' =>
@@ -657,7 +662,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         ));
         $route->run();
         $this->assertSame(0, $route->getErrors());
-        $this->expectOutputString('action3total_success0');
+        $this->expectOutputString('total_successaction3');
     }
 
     public function testMultiRulesFail()
@@ -727,7 +732,8 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
                     ],
                 'success' =>
                     function (Route $route) {
-                        echo 'success' . $route->getErrors();
+                        $this->assertSame(0, $route->getErrors());
+                        echo 'success';
                     }
                 ,
                 'fail' =>
@@ -747,14 +753,13 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
     public function providerRESTSuccess()
     {
         return [
-            ['/orders/', null, '@orders.index', '/orders/', 'indexsuccess0'],
-            ['/orders/77/', 'PUT', '@orders.update', '/orders/{id}/', 'updatesuccess0'],
-            ['/orders/77/', 'PATCH', '@orders.update', '/orders/{id}/', 'updatesuccess0'],
-            ['/orders/77/', null, '@orders.show', '/orders/{id}/', 'showsuccess0'],
-            ['/orders/', 'POST', '@orders.create', '/orders/', 'createsuccess0'],
+            ['/orders/', null, '@orders.index', '/orders/', 'successindex'],
+            ['/orders/77/', 'PUT', '@orders.update', '/orders/{id}/', 'successupdate'],
+            ['/orders/77/', 'PATCH', '@orders.update', '/orders/{id}/', 'successupdate'],
+            ['/orders/77/', null, '@orders.show', '/orders/{id}/', 'successshow'],
+            ['/orders/', 'POST', '@orders.create', '/orders/', 'successcreate'],
         ];
     }
-
 
     /**
      * @dataProvider providerRESTFail
@@ -808,6 +813,231 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         ];
     }
 
+    public function testRouteLocalRulesSuccess()
+    {
+        $_SERVER['REQUEST_URI'] = '/news/7/';
+        $route = (new Route([
+            'rules' => [
+                'foo' => [
+                    Route::GET,
+                    '/news/{id:\d+}/',
+                    function (Route $route) {
+                        $this->assertEquals(7, $route['id']);
+                        return 'success';
+                    }
+                ],
+                'bar' => [
+                    Route::GET,
+                    [
+                        Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+                        Route::FILTER_GET => [
+                            'view' => 'all',
+                            'query' => ''
+                        ]
+                    ],
+                    function (Route $route) {
+                        $this->assertEquals(2, $route['id']);
+                        return 'barsuccess';
+                    }
+                ],
+            ],
+        ]));
+        $route->run();
+
+        $this->assertSame('/news/15/', Alias::getAlias('@foo', ['id' => 15]));
+
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=all&query=');
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none', ['query' => ['view' => 'all', 'query' => '']]);
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+    }
+
+    public function testRouteLocalRulesFail()
+    {
+        $_SERVER['REQUEST_URI'] = '/news/7/';
+        $route = (new Route([
+            'rules' => [
+                'foo' => [
+                    Route::GET,
+                    '/news/{id:\d+}/',
+                    function (Route $route) {
+                        $this->assertEquals(7, $route['id']);
+                        return 'success';
+                    }
+                ],
+                'bar' => [
+                    Route::GET,
+                    [
+                        Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+                        Route::FILTER_GET => [
+                            'view' => 'all',
+                            'query' => ''
+                        ]
+                    ],
+                    function (Route $route) {
+                        $this->assertEquals(2, $route['id']);
+                        return 'barsuccess';
+                    }
+                ],
+            ],
+        ]));
+        $route->run();
+
+        // null
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=all');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none&query=');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none', ['query' => ['view' => 'all']]);
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=none', ['query' => ['view' => 'none', 'query' => '']]);
+        $this->assertNull($response);
+    }
+
+    public function testRouteLocalGroupsSuccess()
+    {
+        $_SERVER['REQUEST_URI'] = '/ajax/news/7/';
+        $route = (new Route([
+            'groups' => [
+                [
+                    Route::ANY,
+                    '/ajax/{url:.+}',
+                    'path' => '/ajax/',
+                    'rules' => [
+                        'foo' => [
+                            Route::GET,
+                            '/news/{id:\d+}/',
+                            function (Route $route) {
+                                $this->assertEquals(7, $route['id']);
+                                $this->assertSame('news/7/', $route['url']);
+                                return 'success';
+                            }
+                        ],
+                    ]
+                ],
+                [
+                    Route::GET,
+                    [
+                        Route::FILTER_HOST =>  'admin.site.com',
+                        Route::FILTER_GET => [
+                            'view' => 'all',
+                            'query' => ''
+                        ]
+                    ],
+                    'rules' => [
+                        'bar' => [
+                            Route::GET,
+                            [
+                                Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+                                Route::FILTER_GET => [
+                                    'view' => 'all',
+                                    'query' => ''
+                                ]
+                            ],
+                            function (Route $route) {
+                                $this->assertEquals(2, $route['id']);
+                                return 'barsuccess';
+                            }
+                        ],
+                    ],
+                    'filters' => function(Route $route){
+                        return $route->request->isAjax();
+                    }
+                ]
+
+            ],
+        ]));
+        $route->run();
+        $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
+        $this->assertSame('success', $route->response->data);
+
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=all&query=', ['isAjax' => true]);
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://admin.site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none', ['isAjax' => true, 'query' => ['view' => 'all', 'query' => '']]);
+        $this->assertSame('barsuccess', $response->data);
+        $this->assertSame('view=all&query=', $response->request->getQueryString());
+        $this->assertSame('http://admin.site.com/bar/2/?view=all&query=', $response->request->getAbsoluteUrl());
+    }
+
+    public function testRouteLocalGroupsFail()
+    {
+        $_SERVER['REQUEST_URI'] = '/ajax/news/7/';
+        $route = (new Route([
+            'groups' => [
+                [
+                    Route::ANY,
+                    '/ajax/{url:.+}',
+                    'path' => '/ajax/',
+                    'rules' => [
+                        'foo' => [
+                            Route::GET,
+                            '/news/{id:\d+}/',
+                            function (Route $route) {
+                                $this->assertEquals(7, $route['id']);
+                                $this->assertSame('news/7/', $route['url']);
+                                return 'success';
+                            }
+                        ],
+                    ]
+                ],
+                [
+                    Route::GET,
+                    [
+                        Route::FILTER_HOST =>  'admin.site.com',
+                        Route::FILTER_GET => [
+                            'view' => 'all',
+                            'query' => ''
+                        ]
+                    ],
+                    'rules' => [
+                        'bar' => [
+                            Route::GET,
+                            [
+                                Route::FILTER_PATH =>  '/bar/{id:\d+}/',
+                                Route::FILTER_GET => [
+                                    'view' => 'all',
+                                    'query' => ''
+                                ]
+                            ],
+                            function (Route $route) {
+                                $this->assertEquals(2, $route['id']);
+                                return 'barsuccess';
+                            }
+                        ],
+                    ]
+                ]
+
+            ],
+        ]));
+        $route->run();
+        $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
+        $this->assertSame('success', $route->response->data);
+
+        // null
+        $response = (new Local(['route' => $route]))->send('/bar/2/?view=all');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=all');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none&query=');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/');
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none', ['query' => ['view' => 'all']]);
+        $this->assertNull($response);
+        $response = (new Local(['route' => $route]))->send('http://admin.site.com/bar/2/?view=none', ['query' => ['view' => 'none', 'query' => '']]);
+        $this->assertNull($response);
+    }
+
     public function testCacheGroup()
     {
         $cache = static::getCache();
@@ -841,6 +1071,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         $route->run();
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
         $this->assertCount(2, $cache->get(Route::className()));
+        $this->assertSame('success', $route->response->data);
 
         Alias::$aliases = [];
         $route = (new Route([
@@ -850,7 +1081,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         ]));
         $route->run();
         $this->assertSame('/ajax/news/{id}/', Alias::getAlias('@foo'));
-        $this->expectOutputString('successsuccess');
+        $this->assertSame('success', $route->response->data);
     }
 
     protected function flushCache()
@@ -898,6 +1129,7 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         $route->run();
         $this->assertSame('/bar/text?view={order}-views', Alias::getAlias('@bar', ['name' => 'text']));
         $this->assertTrue($cache->exists(Route::className()));
+        $this->assertSame('success', $route->response->data);
 
         Alias::$aliases = [];
 
@@ -908,7 +1140,64 @@ class RouteConfigTest extends \PHPUnit_Framework_TestCase
         ]));
         $route->run();
         $this->assertSame('/bar/text?view={order}-views', Alias::getAlias('@bar', ['name' => 'text']));
-        $this->expectOutputString('successsuccess');
+        $this->assertSame('success', $route->response->data);
+    }
+
+    public function testRateLimiterFilter()
+    {
+        $_SERVER['REQUEST_URI'] = '/';
+        $_SESSION = [];
+
+        $route = (new Route(
+            [
+                'rules' =>
+                    [
+                        [
+                            Route::ANY,
+                            '/',
+                            function () {
+
+                                echo 'foo';
+                            },
+                            'filters' => [
+
+                                'rate' => [
+                                    'class' => RateLimiter::className(),
+                                    'limit' => 2,
+                                    'period' => 2,
+                                    'sendHeaders' => true
+                                ]
+                            ]
+                        ],
+                    ],
+                'success' =>
+                    function (Route $route) {
+                        $this->assertSame(0, $route->getErrors());
+                        echo 'success';
+                    }
+                ,
+                'fail' =>
+                    function (Route $route) {
+                        $this->assertSame(Route::E_RATE_LIMIT, $route->getErrors());
+                        echo 'fail';
+                    }
+            ]
+
+        ));
+        $route->run();
+
+        $this->assertSame($_SESSION['_allowance'][Route::className()]["maxRequests"], 1);
+        $route->run();
+        $this->assertSame($_SESSION['_allowance'][Route::className()]["maxRequests"], 0);
+        $route->run();
+        $this->assertSame(2, $route->response->getHeaders()->get('x-rate-limit-limit'));
+        $this->assertSame(429, $route->response->getStatusCode());
+        sleep(4);
+        $route->run();
+        $this->assertSame($_SESSION['_allowance'][Route::className()]["maxRequests"], 1);
+
+        $_SESSION = [];
+        $this->expectOutputString('successfoosuccessfoofailsuccessfoo');
     }
 }
 

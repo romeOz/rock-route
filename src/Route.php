@@ -21,7 +21,7 @@ use rock\request\RequestInterface;
 use rock\response\Response;
 use rock\sanitize\Sanitize;
 
-class Route implements RequestInterface, Requestable, ComponentsInterface, \ArrayAccess
+class Route implements RequestInterface, Requestable, Responseble, ComponentsInterface, \ArrayAccess
 {
     use ComponentsTrait;
 
@@ -55,6 +55,7 @@ REGEX;
     const E_CUSTOM = 8;
     const E_VERBS = 16;
     const E_NOT_FOUND = 32;
+    const E_RATE_LIMIT = 64;
 
     /**
      * List of rules of the route.
@@ -158,10 +159,8 @@ REGEX;
         } else {
             $check = $route->checkRules($route->getRawRules());
         }
-        if ($check) {
-            $this->successInternal();
-        } else {
-            $this->failInternal();
+        if (!$check) {
+            $this->callFail();
         }
         Event::trigger($route, self::EVENT_END_ROUTER);
     }
@@ -380,73 +379,106 @@ REGEX;
     }
 
     /**
-     * Sends a request-query and returns {@see \rock\response\Response}.
-     * @param string $url url
-     * @param array $params
-     * @return Response|null
-     * @throws RouteException
-     * @throws \Exception
-     * @throws \rock\helpers\InstanceException
+     * Returns list prepared groups.
+     * @return array
      */
-    public function route($url, array $params = [])
+    public function getRawGroups()
     {
-        $paramsURL = parse_url($url);
-        $params = array_merge($paramsURL, $params);
-        $params['method'] = isset($params['method']) ? $params['method'] : self::GET;
-        $config = [
-            'method' => $params['method'] ,
-            'scheme' => isset($params['scheme']) ? $params['scheme']: null,
-            'host' => isset($params['host']) ? $params['host']: null,
-            'port' => isset($params['port']) ? $params['port']: null,
-            'url' => isset($params['path']) ? $params['path'] : null
-        ];
-
-        if ($params['method'] !== self::GET) {
-            if (isset($params['query']) && is_array($params['query'])) {
-                $config['bodyParams'] = $params['query'];
-            }
-        } elseif (isset($params['query'])) {
-
-            if (is_array($params['query'])) {
-                $params['query'] = http_build_query($params['query']);
-            }
-            $config['queryString'] = $params['query'];
-            if (isset($config['url'])) {
-                $config['url'] .=  "?{$params['query']}";
+        if (!empty($this->rawGroups)) {
+            return $this->rawGroups;
+        }
+        if ($this->enableCache && isset($this->cache)) {
+            if (($data = $this->cache->get(static::className())) !== false) {
+                list($rawGroups, $aliases) = $data;
+                Alias::setAliases($this->prepareAliases($aliases), false);
+                $rawGroups = $this->calculateCacheGroups($rawGroups, $this->groups);
+                return $this->rawGroups = $rawGroups;
             }
         }
-        $request = $this->request;
-        $config['class'] = $request::className();
-        /** @var Request $request */
-        $request = Instance::ensure($config);
-
-        return $this->routeByRequest($request);
+        list($rawGroups, $aliases) = $this->normalizeGroups($this->groups);
+        if ($this->enableCache && isset($this->cache))  {
+            $this->cache->set(static::className(), [$this->normalizeCacheGroups($rawGroups), $aliases]);
+        }
+        return $this->rawGroups = $rawGroups;
     }
 
     /**
-     * Sends a request-query and returns {@see \rock\response\Response}.
-     * @param Request $request
-     * @return Response|null
-     * @throws RouteException
-     * @throws \rock\helpers\InstanceException
+     * Returns list prepared rules.
+     * @return array
      */
-    public function routeByRequest(Request $request)
+    public function getRawRules()
     {
-        /** @var static $route */
-        $route = Instance::ensure([
-            'class' => static::className(),
-            'request' => $request,
-        ]);
-        if (!empty($this->groups)) {
-            $check = $route->checkGroups($this->groups);
-        } else {
-            $check = $route->checkRules($this->rules);
+        if (!empty($this->rawRules)) {
+            return $this->rawRules;
+        }
+        if ($this->enableCache && isset($this->cache)) {
+            if (($data = $this->cache->get(static::className())) !== false) {
+                list($rawRules, $aliases) = $data;
+                Alias::setAliases($this->prepareAliases($aliases), false);
+                $rawRules = $this->calculateCacheRules($rawRules, $this->rules);
+                return $this->rawRules = $rawRules;
+            }
         }
 
-        if ($check) {
-            return $route->response;
+        $rawRules = $aliases = [];
+        $this->normalizeRules($rawRules, $aliases, $this->rules);
+        if ($this->enableCache && isset($this->cache))  {
+            $this->cache->set(static::className(), [$this->normalizeCacheRules($rawRules), $aliases]);
         }
-        return null;
+        return $this->rawRules = $rawRules;
+    }
+
+    /**
+     * Checking prepared groups.
+     * @param array $rawGroups
+     * @return bool
+     * @throws RouteException
+     */
+    public function checkGroups(array $rawGroups)
+    {
+        foreach ($rawGroups as $group) {
+            list($verbs, $pattern) = $group;
+            if ($this->check($verbs, $pattern, isset($group['filters']) ? $group['filters'] : null)) {
+                if (isset($group['params'])) {
+                    $this->params = array_merge($this->params, $group['params']);
+                }
+                $this->errors = 0;
+                return $this->checkRules(isset($group['rules']) ? $group['rules'] : []);
+            } else {
+                $this->errors |= $this->errors;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checking prepared rules.
+     * @param array $rawRules
+     * @return bool
+     * @throws RouteException
+     */
+    public function checkRules(array $rawRules)
+    {
+        if (!empty($rawRules)) {
+
+            foreach ($rawRules as $rule) {
+                list($verbs, $pattern, $handler) = $rule;
+
+                if ($this->check($verbs, $pattern, isset($rule['filters']) ? $rule['filters'] : null)) {
+                    if (isset($rule['params'])) {
+                        $this->params = array_merge($this->params, $rule['params']);
+                    }
+                    $this->errors = 0;
+                    $this->callSuccess();
+                    $this->handle($handler);
+                    return true;
+                } else {
+                    $this->errors |= $this->errors;
+                }
+            }
+            return false;
+        }
+        throw new RouteException(RouteException::UNKNOWN_PROPERTY, ['name' => 'rules']);
     }
 
     /**
@@ -486,59 +518,6 @@ REGEX;
     public function isErrorNotFound()
     {
         return (bool)(self::E_NOT_FOUND & $this->errors);
-    }
-
-    /**
-     * Checking groups.
-     * @param array $groups
-     * @return bool
-     * @throws RouteException
-     */
-    protected function checkGroups(array $groups)
-    {
-        foreach ($groups as $group) {
-            list($verbs, $pattern) = $group;
-            if ($this->check($verbs, $pattern, isset($group['filters']) ? $group['filters'] : null)) {
-                if (isset($group['params'])) {
-                    $this->params = array_merge($this->params, $group['params']);
-                }
-                $this->errors = 0;
-                return $this->checkRules(isset($group['rules']) ? $group['rules'] : []);
-            } else {
-                $this->errors |= $this->errors;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Checking rules.
-     * @param array $rules
-     * @return bool
-     * @throws RouteException
-     */
-    protected function checkRules(array $rules)
-    {
-        if (!empty($rules)) {
-
-            foreach ($rules as $rule) {
-                list($verbs, $pattern, $handler) = $rule;
-
-                if ($this->check($verbs, $pattern, isset($rule['filters']) ? $rule['filters'] : null)) {
-                    if (isset($rule['params'])) {
-                        $this->params = array_merge($this->params, $rule['params']);
-                    }
-                    $this->errors = 0;
-
-                    $this->handle($handler);
-                    return true;
-                } else {
-                    $this->errors |= $this->errors;
-                }
-            }
-            return false;
-        }
-        throw new RouteException(RouteException::UNKNOWN_PROPERTY, ['name' => 'rules']);
     }
 
     /**
@@ -662,7 +641,7 @@ REGEX;
     protected function checkFilters(array $filters)
     {
         if (!interface_exists('\rock\filters\FilterInterface')) {
-            throw new RouteException(RouteException::NOT_INSTALL_LIBRARY, ['name' => 'rock-filters']);
+            throw new RouteException(RouteException::NOT_INSTALL_FILTERS);
         }
         $result = null;
         $this->attachBehaviors($filters);
@@ -1124,48 +1103,6 @@ REGEX;
         return true;
     }
 
-    protected function getRawGroups()
-    {
-        if (!empty($this->rawGroups)) {
-            return $this->rawGroups;
-        }
-        if ($this->enableCache && isset($this->cache)) {
-            if (($data = $this->cache->get(static::className())) !== false) {
-                list($rawGroups, $aliases) = $data;
-                Alias::setAliases($this->prepareAliases($aliases), false);
-                $rawGroups = $this->calculateCacheGroups($rawGroups, $this->groups);
-                return $this->rawGroups = $rawGroups;
-            }
-        }
-        list($rawGroups, $aliases) = $this->normalizeGroups($this->groups);
-        if ($this->enableCache && isset($this->cache))  {
-            $this->cache->set(static::className(), [$this->normalizeCacheGroups($rawGroups), $aliases]);
-        }
-        return $this->rawGroups = $rawGroups;
-    }
-
-    protected function getRawRules()
-    {
-        if (!empty($this->rawRules)) {
-            return $this->rawRules;
-        }
-        if ($this->enableCache && isset($this->cache)) {
-            if (($data = $this->cache->get(static::className())) !== false) {
-                list($rawRules, $aliases) = $data;
-                Alias::setAliases($this->prepareAliases($aliases), false);
-                $rawRules = $this->calculateCacheRules($rawRules, $this->rules);
-                return $this->rawRules = $rawRules;
-            }
-        }
-
-        $rawRules = $aliases = [];
-        $this->normalizeRules($rawRules, $aliases, $this->rules);
-        if ($this->enableCache && isset($this->cache))  {
-            $this->cache->set(static::className(), [$this->normalizeCacheRules($rawRules), $aliases]);
-        }
-        return $this->rawRules = $rawRules;
-    }
-
     protected function normalizeCacheGroups(array $groups)
     {
         foreach ($groups as &$group) {
@@ -1226,7 +1163,7 @@ REGEX;
         return $aliases;
     }
 
-    protected function successInternal()
+    protected function callSuccess()
     {
         if (!isset($this->success)) {
             return;
@@ -1234,7 +1171,7 @@ REGEX;
         call_user_func($this->success, $this);
     }
 
-    protected function failInternal()
+    protected function callFail()
     {
         if (!isset($this->fail)) {
             return;
