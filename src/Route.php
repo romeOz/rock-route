@@ -1082,6 +1082,8 @@ REGEX;
                 return [$this->data['scheme']];
             case self::FILTER_HOST:
                 return [$this->data['host']];
+            case self::FILTER_PORT:
+                return [!empty($this->data['port']) ? $this->data['port'] : 80];
             case self::FILTER_PATH:
                 return [$this->data['path']];
             case self::FILTER_GET:
@@ -1097,7 +1099,7 @@ REGEX;
 
     protected function isRegExp($value)
     {
-        if (count($value) === 1 && is_string(current($value))) {
+        if (count($value) === 1 && is_scalar(current($value))) {
             return false;
         }
         return true;
